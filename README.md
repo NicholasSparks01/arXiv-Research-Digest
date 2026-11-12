@@ -12,7 +12,7 @@ workstation:
 It uses no cloud LLM APIs and has no Scout quota.
 
 ```
-Task Scheduler (Mon 08:00, America/New_York)
+Task Scheduler (Sun 08:00, America/New_York)
   └─ scripts/run-weekly.ps1 ──► python -m arxiv_digest run
         1. Discovery      arXiv API · 6 category baselines · 10 topic searches · ≤4 adaptive searches · date windows
         2. Collection     canonical ids · dedup · version tracking (paper_versions) · provenance (run_papers/search_runs)
@@ -21,7 +21,8 @@ Task Scheduler (Mon 08:00, America/New_York)
         3c. Ranking       shortlisted papers compared ~10 at a time → order picks full-text candidates and digest papers
         4A. Investigation Stage 2 · top candidates · PDF (PyMuPDF) · page-cited claims · numbers verified verbatim · GitHub check
         4B. Archive       SQLite: scores history, analysis, topics, versions, reports
-        5. Synthesis      Stage 3 · top 5–10 · trends, gaps, ≤3 experiments
+        5a. Annotation    digest papers · every page read · highlights + comments placed with PyMuPDF
+        5b. Synthesis     Stage 3 · top 5–10 · trends, gaps, ≤3 experiments
         6. Report         temp file → validate → commit (never overwrite) → master archive export → SUCCESS
 ```
 
@@ -51,6 +52,9 @@ vault_dir = "C:/Users/<you>/Obsidian/Research"
 | `digest run [--legacy PATH --expect 67] [--force]` | The full weekly pipeline |
 | `digest models` | Checks Ollama, the configured profiles, and VRAM residency |
 | `digest benchmark [--models a,b] [--skip-fulltext]` | Benchmarks local models on 5 representative papers |
+| `digest annotate [--run N] [--paper ID]` | Writes annotated PDFs for a run's digest papers (or one paper) |
+| `digest synthesize [--run N]` | Re-runs the cross-paper synthesis for a successful run (keeps the old file) |
+| `digest blog [--run N] [--mode write\|commit\|push]` | Writes a successful run's digest as a post in the Hugo blog repo (see *Blog publishing*) |
 | `digest triage-eval [--sample 300] [--seed 7]` | Compares compact triage with full screening on a stratified sample of a collected run (read-only) |
 | `digest status` | Recent runs, run states, and the last successful window |
 | `digest search "decompilation"` | SQLite FTS5 search over the archive |
@@ -75,7 +79,8 @@ no longer resolves, title mismatches, and score conflicts. If the unique count d
 
 ## Collection windows
 
-- **Research week:** Monday–Sunday of the last completed week (America/New_York).
+- **Research week:** Monday–Sunday of the week ending on the run’s Sunday (America/New_York). On any other weekday
+  it is the week ending on the previous Sunday.
 - **First run:** the previous 30 days.
 - **Later runs:** from *last successful window end − 3 days* to the end of the research week. A gap since the last
   success is back-filled. The overlap catches papers that arXiv announces late (for example, a Friday submission announced the next Monday).
@@ -222,10 +227,84 @@ STARTED → DISCOVERED → ANALYZED → REPORT_GENERATED → REPORT_VALIDATED �
 
 Papers featured in an earlier successful digest are not repeated. The full index is in `Master Archive.md`.
 
+## Annotated PDFs
+
+Once the digest papers are chosen, each paper's PDF is annotated (`[annotation]`, model profile `annotator`):
+
+- the model reads **every page**, in page-aligned chunks of about 60k characters, and proposes annotations of three kinds:
+  **key aspects** (contributions, design decisions, setting), **win conditions** (how success is defined and measured:
+  criterion, metric or formula, baseline, headline result) and **interesting points** (surprises, tricks, caveats);
+- every annotation quotes text from its page. PyMuPDF searches the page (and its neighbours) for that text and places a
+  highlight there, yellow / green / blue, with the model's note as the comment. Quotes that can't be found are dropped,
+  so every highlight sits on real text. The paper text itself is not changed;
+- page 1 gets a summary note: the paper's formula for success, the notes by kind with page numbers, a colour legend, and
+  a disclosure that the annotations are machine-generated.
+
+The copy is saved in `data/annotated/` and in the vault under `Weekly/Annotated/`, and the digest links it next to the
+arXiv and PDF links. Results are cached by PDF and prompt version. A failed paper is reported in the run manifest
+(`stages.annotation`) and never fails the run. On a 24-page paper it took 43 s (2 model calls), and all 19 proposed
+highlights were placed.
+
+Every annotated copy is also published next to the blog post (a Hugo page bundle) and linked on the paper's line.
+
+## Blog publishing
+
+Each successful weekly run can also be published as a post on a Hugo site built with the Hextra theme
+(`content/blog/weekly-research-digest-YYYY-MM-DD/index.md`). The post appears on the blog list and in the section's RSS
+feed (`/blog/index.xml`, which carries each post's full content). It's written for readers, not as a copy of the vault
+report. Sections, in order:
+
+1. **Introduction and disclosure**: AI-assisted analysis, what was checked against the PDFs, not peer review.
+2. **Research overview**: papers collected, abstracts screened, PDFs analyzed, papers selected, categories.
+3. **Highlights**: findings the papers themselves report.
+4. **Ranked research index**: rank, paper, area and rubric score, with an explanation of why they can disagree. The
+   rank comes from the comparative ranking of abstract summaries; the score is the 100-point rubric (re-scored after the
+   PDF is analyzed), and the label (Critical, High, ...) is just the score's range.
+5. **Paper analyses**: summary, **reader takeaway**, why it stands out, key results with page references, a one-line
+   definition the first time a metric appears, the paper's own code kept apart from **related tools and projects**, and
+   a collapsed block of claims, limitations, method, relevance to your projects and editorial corrections.
+6. **Cross-paper synthesis**: how the papers relate, shared methods, tensions, trends, open questions and experiments,
+   each labelled as a finding, an interpretation or a proposal and linked to the papers it rests on.
+7. **Methodology and coverage** (collapsed): coverage, selection, scoring, verification and limitations.
+
+Evidence rules applied when the post is rendered:
+
+- **Page references for key results** point to the page where all of the result's distinctive numbers appear in the
+  PDF, so a model-cited page that is off by one is corrected automatically.
+- **Synthesis statements** are published only if they cite a paper of the digest and every result-like number in them
+  appears in a cited paper's PDF; anything else is dropped and reported.
+- **A repository counts as the paper's code** only if its name matches the paper or the paper presents it as its own
+  ("our code is available at ..."); everything else is listed as related tools and projects.
+- **Editorial corrections** go in `data/runs/run-NNNN/blog-corrections.toml`. They fix or re-page a paper's claims and
+  results, or fix or drop synthesis items. Each carries a note that is shown in the post; the stored analysis is never
+  changed, and a correction that no longer matches is reported instead of silently ignored.
+
+`digest synthesize --run N` re-runs the cross-paper synthesis for an earlier run (the previous file is kept as
+`synthesis.prevN.json`), for example after the synthesis prompt changes.
+
+All paper and model text is escaped. The site renders raw HTML and Hugo shortcodes, and `\[ … \]` / `$$ … $$` open math
+blocks, so titles and summaries are emitted as inert text: no HTML, shortcodes, math, links or formatting. Links are built
+only from arXiv IDs and verified GitHub repositories.
+
+Settings live under `[blog]` in `config/digest.toml`; the repo path and author go in `config/local.toml`:
+
+| `mode` | What a successful run does |
+|---|---|
+| `write` | Writes the post file only; you review, commit and push yourself |
+| `commit` | Also commits **only that post** to `main` (other staged or unstaged work in the repo is left alone) |
+| `push` | Also pushes, so GitHub Actions deploys it and it goes live in about a minute |
+
+Before anything is committed, the site is built with `hugo` into a temp folder, and the post must render and appear in
+the RSS feed. If the build fails, the post is removed (or the previous version restored). Publishing never changes the
+run's status: problems are recorded under `stages.blog` in the run manifest. PARTIAL and FAILED runs are never published.
+A re-run of the same week updates the same post.
+
+To preview the post locally, run `hugo server` in the blog repo and open http://localhost:1313/blog/.
+
 ## Scheduling
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\register-task.ps1            # Monday 08:00, StartWhenAvailable
+powershell -ExecutionPolicy Bypass -File scripts\register-task.ps1            # Sunday 08:00, StartWhenAvailable
 powershell -ExecutionPolicy Bypass -File scripts\run-weekly.ps1               # run once now, exactly as the scheduler would
 ```
 

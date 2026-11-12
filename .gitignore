@@ -8,6 +8,8 @@ __pycache__/
 data/
 # Generated reports (point output.vault_dir at your Obsidian vault in config/local.toml)
 output/
+# In-project Obsidian vault (generated reports and annotated PDFs, which contain full papers)
+arXiv Vault/
 
 # Machine-specific overrides
 config/local.toml

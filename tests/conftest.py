@@ -17,9 +17,12 @@ def cfg(tmp_path: Path):
     c.raw["paths"]["data_dir"] = str(tmp_path / "data")
     c.raw["paths"]["vault_dir"] = str(tmp_path / "vault")
     c.raw["github"]["enabled"] = False
+    c.raw["annotation"]["enabled"] = False  # needs real PDFs; covered by test_annotate.py
     c.raw["adaptive"]["enabled"] = False
     c.raw["arxiv"]["min_request_interval_s"] = 0
     c.raw["triage"]["min_score"] = 40  # state-machine tests use a 40-90 score spread
+    # never touch a real blog repo configured in config/local.toml
+    c.raw["blog"] = {**c.raw.get("blog", {}), "enabled": False, "repo": str(tmp_path / "no-blog"), "mode": "write"}
     return c
 
 

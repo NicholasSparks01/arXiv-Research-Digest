@@ -143,10 +143,30 @@ class ProposedExperiment(_Strict):
     arxiv_ids: list[str] = Field(default_factory=list, max_length=6)
 
 
+class PaperTakeaway(_Strict):
+    arxiv_id: str = Field(max_length=20)
+    takeaway: str = Field(max_length=500, description="1-3 sentences: practical significance, grounded in the record")
+
+
+class SharedMethod(_Strict):
+    method: str = Field(max_length=200)
+    explanation: str = Field(max_length=S)
+    arxiv_ids: list[str] = Field(default_factory=list, max_length=8)
+
+
+class Tension(_Strict):
+    tension: str = Field(max_length=200)
+    explanation: str = Field(max_length=S)
+    arxiv_ids: list[str] = Field(default_factory=list, max_length=8)
+
+
 class SynthesisOutput(_Strict):
     executive_summary: list[ExecItem] = Field(max_length=5)
-    trends: list[Trend] = Field(default_factory=list, max_length=6)
+    takeaways: list[PaperTakeaway] = Field(default_factory=list, max_length=12)
     comparisons: list[Comparison] = Field(default_factory=list, max_length=4)
+    shared_methods: list[SharedMethod] = Field(default_factory=list, max_length=5)
+    tensions: list[Tension] = Field(default_factory=list, max_length=4)
+    trends: list[Trend] = Field(default_factory=list, max_length=6)
     research_gaps: list[Gap] = Field(default_factory=list, max_length=5)
     experiments: list[ProposedExperiment] = Field(default_factory=list, max_length=3)
 

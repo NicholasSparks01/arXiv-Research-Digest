@@ -14,7 +14,7 @@ from arxiv_digest.config import Config
 from arxiv_digest.llm.provider import LLMOutputError, LLMProvider, SemanticError, run_structured
 
 log = logging.getLogger(__name__)
-SYNTH_PROMPT_VERSION = "synth-v2"
+SYNTH_PROMPT_VERSION = "synth-v3"
 ADAPTIVE_PROMPT_VERSION = "adaptive-v1"
 VERIFY_PROMPT_VERSION = "verify-v1"
 _PHRASE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .+\-]{1,40}$")
@@ -59,11 +59,21 @@ def synthesize(cfg: Config, provider: LLMProvider, archive: Archive, arxiv_ids: 
     briefs = [paper_brief(archive, i) for i in arxiv_ids]
     allowed = set(arxiv_ids)
     system = f"""You are the lead analyst writing the weekly synthesis of a security research digest.
-You receive structured, already-validated records of this week's top papers. Work only from these records.
-- executive_summary: {min(3, len(arxiv_ids))} to {rcfg.get('max_exec_summary', 5)} items, one per genuinely important development, each
-  citing the arxiv_ids it is about.
-- trends / comparisons / research_gaps: grounded in the papers; cite arxiv_ids from the input only.
-- experiments: at most {rcfg.get('max_experiments', 3)} practical experiments the researcher could run, each with integration
+You receive structured, already-validated records of this week's top papers. Work only from these records, and cite
+the arxiv_ids each item is based on (ids from the input only). Keep three kinds of statement apart:
+FINDINGS (what a paper demonstrated), INTERPRETATIONS (what follows from comparing papers) and PROPOSALS (untested ideas).
+- executive_summary (FINDINGS): {min(3, len(arxiv_ids))} to {rcfg.get('max_exec_summary', 5)} items, one per genuinely important
+  result that a paper demonstrated, each citing that paper.
+- takeaways (FINDINGS, one per paper, every paper): 1-3 plain sentences on what the paper means in practice for a security
+  researcher or practitioner, based only on that paper's record. No hype, no claims beyond the record.
+- comparisons (INTERPRETATION): how specific papers relate: one builds on, complements, competes with or evaluates
+  another. Each item cites at least two papers.
+- shared_methods (INTERPRETATION): methodologies or techniques that two or more papers share. Each cites at least two.
+- tensions (INTERPRETATION): results or claims that disagree or pull in different directions. Leave the list empty when
+  the records show no real disagreement; never invent one.
+- trends (INTERPRETATION): directions visible across two or more papers, citing them.
+- research_gaps: questions the papers leave open, citing the papers that raise them.
+- experiments (PROPOSALS): at most {rcfg.get('max_experiments', 3)} practical experiments the researcher could run, each with integration
   points, complexity, and concrete first validation steps. integration_points holds bare project ids from the list
   below (e.g. ["ghidra_mcp"]), never explanations; put the how-to in first_validation_steps.
 Never invent results that are not in the records; prefer 'demonstrated' items over 'claimed_only' items.
@@ -88,13 +98,22 @@ Projects:
         for it in items:
             bad = [i for i in it.get(key, []) if i not in allowed]
             if bad:
-                flags.append(f"removed unknown arxiv ids {bad} from synthesis item {it.get('headline') or it.get('trend') or it.get('title') or it.get('gap') or it.get('theme')!r}")
+                flags.append(f"removed unknown arxiv ids {bad} from synthesis item {it.get('headline') or it.get('trend') or it.get('title') or it.get('gap') or it.get('theme') or it.get('method') or it.get('tension')!r}")
             it[key] = [i for i in it.get(key, []) if i in allowed]
             kept.append(it)
         return kept
 
-    for section in ("executive_summary", "trends", "comparisons", "research_gaps", "experiments"):
+    for section in ("executive_summary", "trends", "comparisons", "shared_methods", "tensions", "research_gaps", "experiments"):
         data[section] = clean_ids(data[section])
+    seen: set[str] = set()
+    takeaways = []
+    for t in data.get("takeaways", []):
+        if t["arxiv_id"] in allowed and t["arxiv_id"] not in seen:
+            seen.add(t["arxiv_id"])
+            takeaways.append(t)
+    data["takeaways"] = takeaways
+    if len(seen) < len(allowed):
+        flags.append(f"takeaways missing for {len(allowed) - len(seen)} paper(s)")
     if len(data["executive_summary"]) < min(3, len(arxiv_ids)):
         flags.append(f"executive summary has only {len(data['executive_summary'])} item(s)")
     for exp in data["experiments"]:

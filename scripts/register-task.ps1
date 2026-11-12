@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-  Registers the weekly "arXiv Research Digest" task in Windows Task Scheduler (Monday 08:00 local time).
+  Registers the weekly "arXiv Research Digest" task in Windows Task Scheduler (Sunday 08:00 local time).
 
 .NOTES
   - Runs as the current user, only when logged on (no stored password). The workstation must be powered on.
-  - StartWhenAvailable: if the PC was off/asleep at 08:00 Monday, the task runs as soon as possible afterwards.
+  - StartWhenAvailable: if the PC was off/asleep at 08:00 Sunday, the task runs as soon as possible afterwards.
   - Task Scheduler uses local time; the pipeline computes windows in America/New_York regardless.
   - Unregister with:  Unregister-ScheduledTask -TaskName 'arXiv Research Digest' -Confirm:$false
 #>
@@ -12,7 +12,7 @@ param(
     [string]$TaskName = 'arXiv Research Digest',
     [string]$At = '08:00',
     [ValidateSet('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')]
-    [string]$Day = 'Monday',
+    [string]$Day = 'Sunday',
     [switch]$WakeToRun
 )
 

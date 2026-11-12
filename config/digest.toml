@@ -4,7 +4,7 @@
 
 [paths]
 data_dir = "data"                 # SQLite archive, PDFs, run manifests, logs
-vault_dir = "output"              # Obsidian vault folder (reports + master archive)
+vault_dir = "arXiv Vault"              # Obsidian vault folder (reports + master archive)
 reports_subdir = "arXiv Research Digest/Weekly"
 collection_subdir = "arXiv Research Digest/Collection"
 archive_file = "arXiv Research Digest/Master Archive.md"
@@ -12,7 +12,7 @@ benchmark_subdir = "arXiv Research Digest/Benchmarks"
 
 [schedule]
 timezone = "America/New_York"
-weekday = "Monday"
+weekday = "Sunday"
 time = "08:00"
 initial_lookback_days = 30        # first run: previous 30 days
 overlap_days = 3                  # later runs: last successful window end − 3 days
@@ -278,6 +278,33 @@ window = 10
 step = 5
 top_n = 15                        # how many top places the sliding window settles (>= investigation.max_candidates)
 
+[blog]
+# Publish each SUCCESSFUL weekly digest as a post in a Hugo blog repo (built for the Hextra theme; the post lands in
+# content/<section>/weekly-research-digest-YYYY-MM-DD/index.md and in that section's RSS feed). Set the repo path and
+# author in config/local.toml. The site build is checked with `hugo` before anything is committed; publishing problems
+# are recorded in the run manifest and never change the run's status. Manual: `digest blog [--run N] [--mode ...]`.
+enabled = false
+repo = ""
+section = "blog"
+mode = "write"                    # write (file only) | commit (commit just the post) | push (commit + push = goes live)
+branch = "main"
+remote = "origin"
+draft = false
+hugo_check = true
+include_relevance = true          # the per-paper "relevance to my work" notes, which name your projects
+title_prefix = "Weekly Research Digest"
+tags = ["Research Digest", "arXiv", "Reverse Engineering", "Vulnerability Research", "AI/LLM"]
+
+[annotation]
+# Annotated PDFs of the digest papers: the model reads every page (in page-aligned chunks) and marks key aspects,
+# win conditions (how success is defined and measured) and interesting points as coloured highlights with comments.
+# Highlights are placed only where the quoted text is found on the page. The annotated copy is kept in
+# data/annotated/ and in the vault, and is published next to the blog post.
+enabled = true
+max_papers = 10
+chunk_chars = 60000               # ~20k tokens of paper text per model call
+max_per_chunk = 20
+
 [investigation]
 max_candidates = 15              # full-text investigation of the top 10–20 candidates
 min_score = 60
@@ -344,6 +371,13 @@ think = false
 # Context 2026-11-11: at 64k qwen3.5:9b is 7.6 GiB and 100% in VRAM (6.2 GiB at 32k). On a 43-page paper it read 33 pages
 # (150k chars, 45.6k prompt tokens) in 41 s, vs. 14 pages in 35 s at 32k.
 [llm.profiles.analyst]
+model = "qwen3.5:9b"
+num_ctx = 65536
+temperature = 0.2
+think = false
+
+# Same model and context as the analyst, so Ollama does not reload between full-text reading and annotation.
+[llm.profiles.annotator]
 model = "qwen3.5:9b"
 num_ctx = 65536
 temperature = 0.2

@@ -154,6 +154,9 @@ def render_paper(cfg: Config, archive: Archive, n: int, arxiv_id: str) -> tuple[
         lines.append(f"- **Why it matters to your research:** {why}")
         lines.append("- *Evidence: abstract only — results and artifacts not yet verified against the full text.*")
     links = [f"[arXiv]({abs_url(arxiv_id)})", f"[PDF]({pdf_url(arxiv_id)})"]
+    annotated = cfg.reports_dir / "Annotated" / f"{arxiv_id.replace('/', '_')}-annotated.pdf"
+    if annotated.exists():
+        links.append(f"[Annotated PDF](Annotated/{annotated.name})")
     for r in repos:
         if r.get("status") == "verified":
             links.append(f"[{r['owner']}/{r['repo']}]({r['url']}) (verified, ★{r.get('stars', '?')})")

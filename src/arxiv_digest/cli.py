@@ -176,6 +176,98 @@ def cmd_benchmark(cfg, args) -> int:
     return 0
 
 
+def cmd_synthesize(cfg, args) -> int:
+    """Re-run cross-paper synthesis for an existing successful run (e.g. after the synthesis prompt changed)."""
+    import json
+    from pathlib import Path
+
+    from arxiv_digest.analysis.synthesis import synthesize
+    from arxiv_digest.archive.db import Archive
+
+    archive = Archive(cfg.db_path)
+    run_id = args.run or int(archive.get_meta("last_successful_run_run_id") or 0)
+    run = archive.run(run_id) if run_id else None
+    rep = archive.conn.execute("SELECT paper_ids FROM reports WHERE run_id=? AND kind='digest' AND validated=1 ORDER BY id DESC LIMIT 1",
+                               (run_id,)).fetchone() if run else None
+    if rep is None:
+        print(f"run {run_id} has no validated digest")
+        return 1
+    data, flags, metrics = synthesize(cfg, archive_provider(cfg), archive, json.loads(rep["paper_ids"]))
+    run_dir = Path(run["manifest_path"]).parent
+    path = run_dir / "synthesis.json"
+    if path.exists():
+        n = 1
+        while (run_dir / f"synthesis.prev{n}.json").exists():
+            n += 1
+        path.replace(run_dir / f"synthesis.prev{n}.json")
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_dir / "synthesis.meta.json").write_text(json.dumps({"flags": flags, "metrics": metrics}, indent=2), encoding="utf-8")
+    print(f"run {run_id}: synthesis written to {path} ({metrics.get('prompt_version')})")
+    print({k: len(v) for k, v in data.items() if isinstance(v, list)})
+    for f in flags:
+        print(f"flag: {f}")
+    return 0
+
+
+def archive_provider(cfg):
+    from arxiv_digest.llm.provider import OllamaProvider
+
+    provider = OllamaProvider.from_config(cfg.section("llm"))
+    provider.ensure_available()
+    return provider
+
+
+def cmd_annotate(cfg, args) -> int:
+    """Annotated PDFs for a run's digest papers (or one paper), copied into the vault."""
+    import json
+
+    from arxiv_digest.analysis.annotate import annotate_paper, copy_to
+    from arxiv_digest.archive.db import Archive
+
+    archive = Archive(cfg.db_path)
+    run_id = args.run or int(archive.get_meta("last_successful_run_run_id") or 0)
+    if args.paper:
+        ids = [args.paper]
+    else:
+        rep = archive.conn.execute("SELECT paper_ids FROM reports WHERE run_id=? AND kind='digest' AND validated=1 "
+                                   "ORDER BY id DESC LIMIT 1", (run_id,)).fetchone()
+        if rep is None:
+            print(f"run {run_id} has no validated digest")
+            return 1
+        ids = json.loads(rep["paper_ids"])[: int(cfg.section("annotation").get("max_papers", 10))]
+    provider = archive_provider(cfg)
+    failed = 0
+    for pid in ids:
+        r = annotate_paper(cfg, archive, provider, run_id, pid)
+        if r.path:
+            copy_to(r.path, cfg.reports_dir / "Annotated")
+        failed += bool(r.error)
+        print(f"{pid}: {'cached ' if r.cached else ''}{r.placed}/{r.proposed} placed, {r.chunks} chunk(s), {r.seconds:.0f} s"
+              + (f"  ERROR {r.error}" if r.error else f" -> {r.path}"))
+    return 1 if failed else 0
+
+
+def cmd_blog(cfg, args) -> int:
+    from arxiv_digest.archive.db import Archive
+    from arxiv_digest.report.blog import publish
+
+    archive = Archive(cfg.db_path)
+    run_id = args.run or int(archive.get_meta("last_successful_run_run_id") or 0)
+    if not run_id:
+        print("no successful run to publish yet")
+        return 1
+    res = publish(cfg, archive, run_id, mode=args.mode)
+    print(f"run {run_id} -> {res.path or '(not written)'}")
+    print(f"mode={res.mode} written={res.written} hugo_build={res.hugo_ok} in_rss={res.in_feed} "
+          f"committed={res.committed}{' ' + res.commit if res.commit else ''} pushed={res.pushed}")
+    for n in res.notes:
+        print(f"note: {n}")
+    if res.error:
+        print(f"error: {res.error}")
+        return 1
+    return 0
+
+
 def cmd_triage_eval(cfg, args) -> int:
     from arxiv_digest.archive.db import Archive
     from arxiv_digest.triage_eval import run_triage_eval
@@ -234,6 +326,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--stages", help="comma-separated subset of screening,fulltext,verification (default: all)")
     p.add_argument("--verifiers", help="comma-separated verifier models (default: benchmark.toml verifier_models, else the verifier profile)")
     p.set_defaults(fn=cmd_benchmark)
+
+    p = sub.add_parser("annotate", help="annotated PDFs (key aspects, win conditions, interesting points) for digest papers")
+    p.add_argument("--run", type=int, help="run id (default: the last successful weekly run)")
+    p.add_argument("--paper", help="annotate one arXiv id instead of the run's digest papers")
+    p.set_defaults(fn=cmd_annotate)
+
+    p = sub.add_parser("synthesize", help="re-run cross-paper synthesis for a successful run (keeps the old file)")
+    p.add_argument("--run", type=int, help="run id (default: the last successful weekly run)")
+    p.set_defaults(fn=cmd_synthesize)
+
+    p = sub.add_parser("blog", help="write the weekly digest as a post in the Hugo blog repo (see [blog] in config)")
+    p.add_argument("--run", type=int, help="run id (default: the last successful weekly run)")
+    p.add_argument("--mode", choices=["write", "commit", "push"],
+                   help="write the file only, also commit just that post, or commit and push (default: [blog] mode)")
+    p.set_defaults(fn=cmd_blog)
 
     p = sub.add_parser("triage-eval", help="measure compact triage against full screening on a sample of a collected run")
     p.add_argument("--run", type=int, help="run id to sample from (default: latest run with collected papers)")

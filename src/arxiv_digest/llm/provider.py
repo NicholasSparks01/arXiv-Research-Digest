@@ -130,6 +130,8 @@ class OllamaProvider:
         t0 = time.monotonic()
         try:
             resp = self._http.post("/api/chat", json=body)
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            raise LLMUnavailable(f"Ollama is not reachable: {exc}") from exc
         except httpx.HTTPError as exc:
             raise LLMError(f"Ollama request failed: {exc}") from exc
         if resp.status_code == 404:

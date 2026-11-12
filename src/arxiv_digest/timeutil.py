@@ -33,11 +33,16 @@ def now_in(tz_name: str) -> datetime:
 
 
 def previous_research_week(now: datetime) -> tuple[date, date]:
-    """Monday–Sunday of the last *completed* week relative to `now` (in now's timezone)."""
+    """Monday–Sunday of the last completed week relative to `now` (in now's timezone).
+
+    A Sunday counts as the last day of its own week: the weekly run is scheduled for Sunday morning, and the week
+    it reports is the one ending that day. The window therefore ends at the coming Monday 00:00, a few hours in the
+    future — arXiv has nothing there yet, and anything submitted later that Sunday is picked up by the next run's
+    overlap. On any other weekday the week is the one ending on the previous Sunday, as before.
+    """
     today = now.date()
-    this_monday = today - timedelta(days=today.weekday())
-    last_monday = this_monday - timedelta(days=7)
-    return last_monday, last_monday + timedelta(days=6)
+    week_end = today - timedelta(days=(today.weekday() + 1) % 7)  # the most recent Sunday (today, if today is Sunday)
+    return week_end - timedelta(days=6), week_end
 
 
 def compute_window(

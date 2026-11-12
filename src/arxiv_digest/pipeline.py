@@ -246,6 +246,23 @@ class Pipeline:
             manifest.update(traceback=traceback.format_exc(), problems=problems)
             return self._finish(run_id, manifest, "FAILED", f"{type(exc).__name__}: {exc}", None, t0)
 
+    def _annotate(self, run_id: int, paper_ids: list[str]) -> list[dict]:
+        """Annotated PDFs of the digest papers, copied into the vault. Optional: problems are recorded, never fatal."""
+        from arxiv_digest.analysis.annotate import annotate_papers, copy_to
+
+        try:
+            results = annotate_papers(self.cfg, self.archive, self.provider, run_id, paper_ids)
+        except Exception as exc:  # noqa: BLE001 - e.g. Ollama went away; the digest still goes out without them
+            log.warning("annotation stage failed: %s", exc)
+            return [{"error": f"{type(exc).__name__}: {exc}"}]
+        out = []
+        for r in results:
+            row = {k: v for k, v in asdict(r).items() if k != "annotations"}
+            if r.path:
+                row["vault_copy"] = str(copy_to(r.path, self.cfg.reports_dir / "Annotated"))
+            out.append(row)
+        return out
+
     # ------------------------------------------------------------------ full run
     def run(self, now: datetime | None = None, force: bool = False, legacy: Path | None = None, expected: int | None = None) -> RunOutcome:
         t0 = time.monotonic()
@@ -276,6 +293,7 @@ class Pipeline:
                 rerank_on = bool(self.cfg.section("rerank").get("enabled", True))
                 needed = ({"screener", "analyst", "synthesizer"} | ({"triage"} if triage_on else set())
                           | ({"reranker"} if rerank_on else set())
+                          | ({"annotator"} if self.cfg.section("annotation").get("enabled", True) else set())
                           | ({"verifier"} if self.cfg.section("verification").get("enabled") else set()))
                 installed = set(self.provider.list_models())
                 missing = sorted({self.cfg.profile(n).model for n in needed} - installed)
@@ -381,6 +399,9 @@ class Pipeline:
             rcfg = self.cfg.section("report")
             if len(paper_ids) < int(rcfg.get("min_report_papers", 1)):
                 problems.append(f"only {len(paper_ids)} qualifying paper(s) for the digest")
+            if paper_ids and self.cfg.section("annotation").get("enabled", True):
+                stages["annotation"] = self._annotate(run_id, paper_ids)
+                manifest.save()
             synthesis, synth_flags = None, []
             if paper_ids:
                 try:
@@ -424,6 +445,12 @@ class Pipeline:
                 self.archive.finish_run(run_id, status, "; ".join(problems) or None, str(manifest.path))
             stages["archive"] = {"path": str(export.path), "qualifying": len(export.paper_ids)}
             manifest.data["problems"] = problems
+            if status == "SUCCESS" and self.cfg.section("blog").get("enabled", False):
+                # after the commit transaction: a blog problem is reported but never changes the run's outcome
+                from arxiv_digest.report.blog import publish
+
+                manifest.save()
+                stages["blog"] = asdict(publish(self.cfg, self.archive, run_id))
             return self._finish(run_id, manifest, status, "; ".join(problems) or None, str(final), t0)
         except StageFailure as exc:
             manifest.update(problems=problems)

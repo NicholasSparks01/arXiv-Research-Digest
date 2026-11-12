@@ -69,6 +69,16 @@ def test_window_initial_and_overlap():
     assert w3.start == datetime(2026, 10, 2, tzinfo=NY)
 
 
+def test_window_sunday_reports_the_week_ending_today():
+    """The scheduled run is Sunday morning: the week it reports is the one ending that day, not a week earlier."""
+    sunday = compute_window(datetime(2026, 11, 15, 8, 0, tzinfo=NY), "America/New_York", None)
+    assert (sunday.research_week_start.isoformat(), sunday.research_week_end.isoformat()) == ("2026-11-09", "2026-11-15")
+    assert sunday.end == datetime(2026, 11, 16, 0, 0, tzinfo=NY)  # the coming Monday 00:00, still a few hours ahead
+    # the Monday after reports the same week, so a report keeps the same name whichever day the run happens
+    monday = compute_window(datetime(2026, 11, 16, 8, 0, tzinfo=NY), "America/New_York", None)
+    assert (monday.research_week_start, monday.research_week_end) == (sunday.research_week_start, sunday.research_week_end)
+
+
 def test_parse_feed():
     total, papers = parse_feed(ATOM)
     assert total == 2
