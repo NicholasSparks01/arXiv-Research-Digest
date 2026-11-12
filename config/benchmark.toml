@@ -1,0 +1,55 @@
+# Model benchmark: pick the screening model and the analyst model on research-analysis quality,
+# not on leaderboard scores. Models that are not installed are reported and skipped (nothing is pulled).
+#
+# expected_bands / expected_topics are PROVISIONAL gold labels — review and adjust them to your own judgement.
+
+repeats = 3                                   # screening repeats per paper (score stability)
+screening_models = ["qwen3.5:9b", "gpt-oss:20b"]
+analyst_models = ["gpt-oss:20b", "qwen3.5:9b"]
+verifier_models = ["deepseek-r1:14b"]          # challenge pass over each analyst's full-text analysis
+investigate_papers = ["2403.05286", "2308.06782"]   # full-text benchmark subset (PDF)
+
+# Per-model request options (otherwise taken from the matching profile in digest.toml, else defaults).
+[model_options."qwen3.5:9b"]
+think = false
+[model_options."gpt-oss:20b"]
+think = "medium"
+[model_options."deepseek-r1:14b"]
+think = true
+num_ctx = 8192
+
+[[papers]]
+arxiv_id = "2403.05286"
+label = "LLM4Decompile"
+role = "Tier 1+2 core: LLM-based binary decompilation with released models and benchmark"
+expected_bands = ["Critical", "High"]
+expected_topics = ["t1.reverse_engineering", "t2.llm_reverse_engineering"]
+
+[[papers]]
+arxiv_id = "2308.06782"
+label = "PentestGPT"
+role = "Tier 2: agentic penetration testing"
+expected_bands = ["Critical", "High"]
+expected_topics = ["t2.agentic_pentesting", "t2.security_agents"]
+
+[[papers]]
+arxiv_id = "2308.04748"
+label = "Fuzz4All"
+role = "Tier 1+2: LLM-driven universal fuzzing"
+expected_bands = ["Critical", "High"]
+expected_topics = ["t1.fuzzing_testing", "t2.llm_vulnerability_discovery"]
+
+[[papers]]
+arxiv_id = "1801.01203"
+label = "Spectre"
+role = "Tier 1: hardware side channels / transient execution (no AI component)"
+expected_bands = ["Critical", "High", "Medium"]
+expected_topics = ["t1.hardware_side_channel"]
+
+[[papers]]
+arxiv_id = "2210.03629"
+label = "ReAct"
+role = "NEGATIVE CONTROL: generic agent / tool-use paper with no security connection — must not reach High"
+expected_bands = ["Medium", "Low", "Below threshold"]
+expected_topics = ["t3.agent_orchestration"]
+negative_control = true

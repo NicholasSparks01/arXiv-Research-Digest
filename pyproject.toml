@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arxiv-research-digest"
+version = "0.1.0"
+description = "Local-first arXiv research collection and analysis pipeline (Ollama + SQLite + Obsidian Markdown)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.9",
+    "pymupdf>=1.24",
+    "tzdata>=2024.1",   # zoneinfo data on Windows (America/New_York)
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+digest = "arxiv_digest.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,365 @@
+# arXiv Research Digest — default configuration.
+# Machine-specific overrides (e.g. your Obsidian vault path) go in config/local.toml,
+# which is merged over this file and is not committed.
+
+[paths]
+data_dir = "data"                 # SQLite archive, PDFs, run manifests, logs
+vault_dir = "output"              # Obsidian vault folder (reports + master archive)
+reports_subdir = "arXiv Research Digest/Weekly"
+collection_subdir = "arXiv Research Digest/Collection"
+archive_file = "arXiv Research Digest/Master Archive.md"
+benchmark_subdir = "arXiv Research Digest/Benchmarks"
+
+[schedule]
+timezone = "America/New_York"
+weekday = "Monday"
+time = "08:00"
+initial_lookback_days = 30        # first run: previous 30 days
+overlap_days = 3                  # later runs: last successful window end − 3 days
+
+[arxiv]
+api_url = "https://export.arxiv.org/api/query"
+min_request_interval_s = 3.1      # arXiv API terms: ≤ 1 request / 3 s
+page_size = 500
+max_retries = 4
+timeout_s = 90
+user_agent = "arxiv-research-digest/0.1 (local research pipeline)"
+category_max_results = 20000      # safety cap per category per window
+topic_max_results = 600           # topic queries hitting this cap are recorded as SATURATED
+fail_run_on_query_error = true    # a failed query makes the run PARTIAL (window is not advanced)
+
+# Discovery boundaries. Every query is restricted to these categories.
+categories = ["cs.CR", "cs.AR", "cs.SE", "cs.AI", "cs.CL", "cs.LG"]
+
+# Core topic searches (arXiv query syntax). Overlap with the category baseline is intentional.
+[[topic_searches]]
+id = "T01"
+name = "Reverse engineering, decompilation, binary analysis"
+query = '''all:"reverse engineering" OR all:decompilation OR all:decompiler OR all:"binary analysis" OR all:disassembly OR all:"binary code"'''
+
+[[topic_searches]]
+id = "T02"
+name = "Vulnerability discovery and automated program analysis"
+query = '''all:"vulnerability detection" OR all:"vulnerability discovery" OR all:"vulnerability analysis" OR all:"static analysis" OR all:"program analysis" OR all:"taint analysis"'''
+
+[[topic_searches]]
+id = "T03"
+name = "Fuzzing, coverage-guided fuzzing, symbolic execution"
+query = '''all:fuzzing OR all:fuzzer OR all:"symbolic execution" OR all:concolic OR all:"coverage-guided"'''
+
+[[topic_searches]]
+id = "T04"
+name = "Firmware, embedded and IoT security"
+query = '''all:firmware OR all:rehosting OR (all:embedded AND all:security) OR (all:IoT AND all:security) OR all:microcontroller'''
+
+[[topic_searches]]
+id = "T05"
+name = "Hardware security, side channels, processor vulnerabilities"
+query = '''all:"side-channel" OR all:"side channel" OR all:"hardware security" OR all:"fault injection" OR all:"transient execution" OR all:Spectre OR all:Rowhammer OR (all:"RISC-V" AND all:security)'''
+
+[[topic_searches]]
+id = "T06"
+name = "LLM-assisted vulnerability research and reverse engineering"
+query = '''(all:LLM OR all:"large language model" OR all:"language models") AND (all:vulnerability OR all:"reverse engineering" OR all:decompilation OR all:exploit OR all:malware OR all:binary)'''
+
+[[topic_searches]]
+id = "T07"
+name = "Autonomous security agents and penetration testing"
+query = '''all:"penetration testing" OR all:pentest OR all:pentesting OR all:"red teaming agent" OR ((all:agent OR all:agents OR all:agentic) AND (all:"capture the flag" OR all:CTF OR all:offensive OR all:exploitation))'''
+
+[[topic_searches]]
+id = "T08"
+name = "MCP, tool calling and agent planning for security"
+query = '''all:"model context protocol" OR ((all:"tool calling" OR all:"tool use" OR all:"function calling" OR all:"tool-augmented") AND (all:security OR all:vulnerability OR all:attack))'''
+
+[[topic_searches]]
+id = "T09"
+name = "Open-weight LLM releases and local inference"
+query = '''((all:"open-weight" OR all:"open weight" OR all:"open-source" OR all:"technical report") AND (all:"language model" OR all:LLM)) OR ((all:quantization OR all:"speculative decoding" OR all:"KV cache") AND all:inference)'''
+
+[[topic_searches]]
+id = "T10"
+name = "Binary analysis, program synthesis and decompilation refinement"
+query = '''all:"binary lifting" OR all:"intermediate representation" OR all:"binary code similarity" OR all:"function name" OR all:"type inference" OR (all:"program synthesis" AND (all:binary OR all:assembly OR all:decompil))'''
+
+# ---------------------------------------------------------------------------
+# Interest taxonomy. Keywords drive the deterministic pre-filter only;
+# classification is done by the screening model and validated against these ids.
+# ---------------------------------------------------------------------------
+[[taxonomy]]
+id = "t1.reverse_engineering"
+tier = 1
+name = "Reverse engineering and decompilation"
+keywords = ["reverse engineering", "decompil", "disassembl", "ghidra", "ida pro", "binary ninja"]
+
+[[taxonomy]]
+id = "t1.binary_program_analysis"
+tier = 1
+name = "Binary analysis and program analysis"
+keywords = ["binary analysis", "program analysis", "static analysis", "dynamic analysis", "taint", "binary code", "control flow graph"]
+
+[[taxonomy]]
+id = "t1.vulnerability_research"
+tier = 1
+name = "Vulnerability research and discovery"
+keywords = ["vulnerabilit", "exploitation", "exploitable", "exploit generation", "cve-", "cves", "memory safety", "bug detection", "zero-day", "use-after-free", "buffer overflow"]
+
+[[taxonomy]]
+id = "t1.fuzzing_testing"
+tier = 1
+name = "Fuzzing and automated testing"
+keywords = ["fuzz", "symbolic execution", "concolic", "test generation", "coverage-guided"]
+
+[[taxonomy]]
+id = "t1.firmware_embedded"
+tier = 1
+name = "Firmware and embedded security"
+keywords = ["firmware", "embedded system", "embedded device", "iot ", "iot-", "internet of things", "microcontroller", "rehosting", "bootloader"]
+
+[[taxonomy]]
+id = "t1.hardware_side_channel"
+tier = 1
+name = "Hardware security and side-channel analysis"
+keywords = ["side-channel", "side channel", "hardware security", "fault injection", "transient execution", "spectre", "rowhammer", "hardware trojan"]
+
+[[taxonomy]]
+id = "t2.llm_reverse_engineering"
+tier = 2
+name = "LLMs for reverse engineering"
+keywords = ["llm decompil", "language model decompil", "llm reverse engineering", "llm binary"]
+
+[[taxonomy]]
+id = "t2.llm_vulnerability_discovery"
+tier = 2
+name = "LLMs for vulnerability discovery"
+keywords = ["llm vulnerab", "language model vulnerab", "llm-based vulnerab", "llm fuzz"]
+
+[[taxonomy]]
+id = "t2.agentic_pentesting"
+tier = 2
+name = "Agentic penetration testing"
+keywords = ["penetration test", "pentest", "capture the flag", "ctf ", "ctf-", "red team"]
+
+[[taxonomy]]
+id = "t2.security_agents"
+tier = 2
+name = "Security-focused autonomous agents"
+keywords = ["security agent", "cyber agent", "autonomous cyber", "agentic security", "cybersecurity agent"]
+
+[[taxonomy]]
+id = "t2.mcp_tool_calling"
+tier = 2
+name = "MCP tool-calling agents (security)"
+keywords = ["model context protocol", "mcp server", "mcp "]
+
+[[taxonomy]]
+id = "t2.security_tool_planning"
+tier = 2
+name = "Tool-use planning for security research"
+keywords = ["tool use", "tool calling", "function calling", "tool-augmented"]
+
+[[taxonomy]]
+id = "t3.open_weight_llms"
+tier = 3
+name = "Open-weight language model releases"
+keywords = ["open-weight", "open weight", "technical report", "open-source llm", "open model"]
+
+[[taxonomy]]
+id = "t3.local_inference"
+tier = 3
+name = "Local inference and model optimization"
+keywords = ["quantiz", "speculative decoding", "kv cache", "inference efficiency", "on-device", "distillation"]
+
+[[taxonomy]]
+id = "t3.agent_orchestration"
+tier = 3
+name = "Agent orchestration and multi-agent planning"
+keywords = ["multi-agent", "agent orchestration", "agentic workflow", "planning agent"]
+
+[[taxonomy]]
+id = "t3.binary_lifting_ir"
+tier = 3
+name = "Binary lifting and intermediate representations"
+keywords = ["lifting", "intermediate representation", "llvm ir", "p-code", "binary translation"]
+
+[[taxonomy]]
+id = "t3.riscv_architecture"
+tier = 3
+name = "RISC-V security and processor architecture"
+keywords = ["risc-v", "riscv", "microarchitect", "processor design", "isa extension"]
+
+# Generic agent topics: without a demonstrated security / RE connection a paper that is
+# only about these is capped at Medium (it cannot become High/Critical for discussing tool calling).
+[guardrails]
+generic_agent_topics = ["t3.agent_orchestration"]
+generic_agent_cap = 69
+no_security_connection_cap = 69
+security_only_tier2 = true        # tier-2 topics are dropped if the model reports no security connection
+
+# ---------------------------------------------------------------------------
+# Scoring (100 points) and bands
+# ---------------------------------------------------------------------------
+[scoring]
+alignment_max = 30
+applicability_max = 25
+cross_domain_max = 15
+novelty_max = 15
+reproducibility_max = 15
+archive_threshold = 40            # qualifying papers (kept in master archive, eligible for digest)
+
+[scoring.bands]
+Critical = 85
+High = 70
+Medium = 50
+Low = 40
+
+# Practical applicability is evaluated against these projects.
+[[projects]]
+id = "agentic_re"
+name = "Agentic reverse engineering pipeline"
+
+[[projects]]
+id = "ghidra_mcp"
+name = "Ghidra and GhidrAssistMCP"
+
+[[projects]]
+id = "binary_triage"
+name = "Binary triage and evidence-based analysis"
+
+[[projects]]
+id = "capa_floss"
+name = "capa/FLOSS integration"
+
+[[projects]]
+id = "decomp_refinement"
+name = "Decompilation refinement"
+
+[[projects]]
+id = "local_models"
+name = "Local model and agent architecture"
+
+[[projects]]
+id = "embedded_hw"
+name = "Embedded and hardware security"
+
+# ---------------------------------------------------------------------------
+# Analysis pipeline
+# ---------------------------------------------------------------------------
+[screening]
+# Papers from these categories are always screened; papers from the remaining categories
+# are screened when found by a topic/adaptive search or when the keyword pre-filter fires.
+full_screen_categories = ["cs.CR", "cs.AR", "cs.SE"]
+prefilter_min_score = 2
+max_papers_per_run = 4000
+
+[triage]
+# Stage 0: every pre-filtered paper gets a compact triage (~1 s/paper); only papers that clear min_score get full
+# screening (~6 s/paper), best first, up to the cap. Measured 2026-11-11 against the 52 legacy-archive papers in the
+# 30-day collection: a gate of 65 kept 13/13 papers the legacy archive rated >=70 and 24/27 rated >=60, at ~120
+# papers/week (~13 min of full screening). A fixed top-40 cut would have kept only ~8/13: triage scores bunch at 79-94.
+enabled = true
+min_score = 65                    # the shortlist gate: papers below this are never fully screened
+shortlist_per_week = 120          # time cap: places per research week in the window (a 30-day first run gets 4x)
+max_shortlist = 300               # cap for long windows (first run, back-fill): ~33 min of full screening
+recheck_margin = 10               # papers up to this far below the gate/cut-off are triaged again; the higher score counts
+recheck_max = 60
+adaptive_max_extra = 15           # adaptive-search papers must also clear the shortlist cut-off
+
+[rerank]
+# Stage 1b: the model compares ~10 screened papers at a time and orders them. That order (not the tied absolute scores)
+# picks the full-text candidates and the digest papers. Tournament rounds shrink the pool to final_pool, then a sliding
+# window settles the top_n. ~70 short calls for a 300-paper shortlist, ~35 for a typical week.
+enabled = true
+min_score = 60                    # screened papers below this are not ranked
+group_size = 10
+keep_fraction = 0.6               # share of each group that advances; one round is noisy, so eliminate gently
+final_pool = 40
+window = 10
+step = 5
+top_n = 15                        # how many top places the sliding window settles (>= investigation.max_candidates)
+
+[investigation]
+max_candidates = 15              # full-text investigation of the top 10–20 candidates
+min_score = 60
+max_text_chars = 160000           # extracted text budget; dense papers run ~2.9-3.3 chars/token, so 160k chars ≈ 49-55k tokens
+answer_reserve_tokens = 6000      # context left for the answer; on overflow the text is shrunk to fit and retried once
+download_timeout_s = 120
+
+[adaptive]
+enabled = true
+max_searches = 4
+seed_min_score = 70
+seed_papers = 8
+
+[verification]
+enabled = false                   # optional DeepSeek-R1 challenge pass
+max_papers = 3
+
+[github]
+enabled = true
+token_env = "GITHUB_TOKEN"        # optional; unauthenticated limit is 60 requests/hour
+
+[report]
+min_papers = 5
+max_papers = 10
+min_digest_score = 40
+high_score = 70
+min_report_papers = 1             # fewer qualifying papers than this → run is PARTIAL, not SUCCESS
+max_experiments = 3
+max_exec_summary = 5
+
+# ---------------------------------------------------------------------------
+# Local LLM provider and analysis profiles. Model names are Ollama tags.
+# ---------------------------------------------------------------------------
+[llm]
+provider = "ollama"
+base_url = "http://127.0.0.1:11434"
+request_timeout_s = 900
+keep_alive = "15m"
+max_validation_retries = 1
+
+# Stage 0 triage: ids + integers only (~60-80 output tokens vs ~680 for full screening).
+# Same model and num_ctx as the screener so Ollama does not reload between the two stages.
+[llm.profiles.triage]
+model = "qwen3.5:9b"
+num_ctx = 8192
+temperature = 0.1
+think = false
+
+[llm.profiles.reranker]
+model = "qwen3.5:9b"
+num_ctx = 8192
+temperature = 0.1
+think = false
+
+[llm.profiles.screener]
+model = "qwen3.5:9b"
+num_ctx = 8192
+temperature = 0.1
+think = false
+
+# Benchmark 2026-11-11 (RTX 5080, 16 GB): qwen3.5:9b matched or beat gpt-oss:20b on full-text analysis
+# (5/5 experiments verified, correct bands) at 33 s/paper, fully in VRAM at 32k. gpt-oss:20b took 95-125 s/paper,
+# spilled 20% to system RAM at 32k, and scored PentestGPT as Medium.
+# Context 2026-11-11: at 64k qwen3.5:9b is 7.6 GiB and 100% in VRAM (6.2 GiB at 32k). On a 43-page paper it read 33 pages
+# (150k chars, 45.6k prompt tokens) in 41 s, vs. 14 pages in 35 s at 32k.
+[llm.profiles.analyst]
+model = "qwen3.5:9b"
+num_ctx = 65536
+temperature = 0.2
+think = false
+
+# Synthesis is not benchmarked yet; qwen3.5:9b avoids the VRAM spill. gpt-oss:20b fits fully only up to num_ctx 16384.
+[llm.profiles.synthesizer]
+model = "qwen3.5:9b"
+num_ctx = 32768
+temperature = 0.3
+think = false
+
+# Verifier prompts are ~2k tokens + ~2k output. At 32k this model is 35 GB (41% in VRAM, 196 s/review);
+# at 8k it is 93% in VRAM. Benchmark: its challenges were mostly generic and it disagreed with every analysis.
+[llm.profiles.verifier]
+model = "deepseek-r1:14b"
+num_ctx = 8192
+temperature = 0.3
+think = true

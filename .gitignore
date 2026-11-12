@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Runtime state (SQLite archive, PDFs, manifests, logs)
+data/
+# Generated reports (point output.vault_dir at your Obsidian vault in config/local.toml)
+output/
+
+# Machine-specific overrides
+config/local.toml
